@@ -1,0 +1,3 @@
+OPENAI_API_KEY=replace-locally-never-commit
+ALLOWED_ORIGIN=http://127.0.0.1:5173
+OPENAI_MODEL=gpt-4.1-mini
