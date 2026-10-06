@@ -4,7 +4,7 @@ export default defineConfig({
   fullyParallel: true,
   use: {
     baseURL: 'http://127.0.0.1:5173',
-    channel: 'chrome',
+    channel: process.env.E2E_BROWSER === 'chromium' ? undefined : 'chrome',
     screenshot: 'only-on-failure',
   },
   webServer: {
