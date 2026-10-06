@@ -15,17 +15,23 @@
     "test:e2e": "playwright test",
     "api:dev": "wrangler dev --config worker/wrangler.jsonc --port 8787",
     "api:deploy": "wrangler deploy --config worker/wrangler.jsonc",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "predev": "node scripts/prepare-ocr.mjs",
+    "prebuild": "node scripts/prepare-ocr.mjs"
   },
   "dependencies": {
+    "@tesseract.js-data/eng": "^1.0.0",
+    "@tesseract.js-data/pol": "^1.0.0",
     "lucide-react": "^1.52.0",
     "openai": "^7.28.0",
     "pdfjs-dist": "^6.4.299",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
+    "tesseract.js": "^7.0.0",
     "zod": "^4.6.5"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
     "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.63.0",
     "@types/node": "^24.13.3",

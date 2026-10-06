@@ -17,7 +17,15 @@ export async function analyzeDocument(
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(document),
-      signal: AbortSignal.any([signal, AbortSignal.timeout(28_000)]),
+      signal: AbortSignal.any([
+        signal,
+        AbortSignal.timeout(
+          document.pages.reduce((sum, page) => sum + page.text.length, 0) >
+            40000
+            ? 90_000
+            : 28_000,
+        ),
+      ]),
     })
   } catch (error) {
     if (signal.aborted) throw error

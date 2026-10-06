@@ -2,7 +2,13 @@ import { useState } from 'react'
 import { Braces, Check, Copy, Download, FileCheck2, Quote } from 'lucide-react'
 import type { AnalysisResponse } from '../../shared/schema'
 
-export function Results({ result }: { result: AnalysisResponse }) {
+export function Results({
+  result,
+  onSource,
+}: {
+  result: AnalysisResponse
+  onSource?: (page: number) => void
+}) {
   const [view, setView] = useState<'readable' | 'json'>('readable')
   const [copyStatus, setCopyStatus] = useState('')
   const { analysis, meta } = result
@@ -44,6 +50,18 @@ export function Results({ result }: { result: AnalysisResponse }) {
           istotne informacje lub zmiany warunków. Nie zostały odczytane przez
           AI.
         </div>
+      )}
+      {!!meta.ocrPages?.length && (
+        <p className="notice warning">
+          Strony {meta.ocrPages.join(', ')} odczytano przez OCR. Rozpoznawanie
+          obrazu może pomylić cyfry i znaki — sprawdź ważne dane w oryginale.
+        </p>
+      )}
+      {(meta.chunks ?? 1) > 1 && (
+        <p className="notice">
+          Długi dokument przeanalizowano w {meta.chunks} częściach i połączono
+          wyniki.
+        </p>
       )}
       <div className="result-toolbar">
         <div className="view-switch" role="group" aria-label="Widok wyniku">
@@ -199,6 +217,16 @@ export function Results({ result }: { result: AnalysisResponse }) {
                     <span className="source-page">
                       <Quote size={15} /> Strona {source.page}
                     </span>
+                    {onSource ? (
+                      <button
+                        className="text-button"
+                        onClick={() => onSource(source.page)}
+                      >
+                        Otwórz stronę {source.page}
+                      </button>
+                    ) : (
+                      <small>Podgląd oryginału dostępny po wgraniu PDF.</small>
+                    )}
                     <p>{source.quote}</p>
                     <footer>{source.fact}</footer>
                   </blockquote>

@@ -16,6 +16,15 @@ import {
 import type { AnalysisRequest, AnalysisResponse } from '../shared/schema'
 import { analyzeDocument } from './api/client'
 import { Results } from './components/Results'
+import { SourceViewer } from './components/SourceViewer'
+import { demoPdf } from './lib/demo'
+import {
+  deleteHistory,
+  historyEnabled,
+  readHistory,
+  saveHistory,
+  setHistoryEnabled,
+} from './lib/history'
 import './App.css'
 
 type Stage = 'empty' | 'reading' | 'ready' | 'analyzing' | 'done' | 'error'
@@ -30,6 +39,11 @@ function App() {
   const [progress, setProgress] = useState('')
   const [elapsed, setElapsed] = useState(0)
   const [showPrivacy, setShowPrivacy] = useState(false)
+  const [ocrEnabled, setOcrEnabled] = useState(false)
+  const [remember, setRemember] = useState(historyEnabled)
+  const [history, setHistory] = useState(readHistory)
+  const [historyMessage, setHistoryMessage] = useState('')
+  const [sourcePage, setSourcePage] = useState<number | null>(null)
   const input = useRef<HTMLInputElement>(null)
   const controller = useRef<AbortController | null>(null)
   const busy = stage === 'reading' || stage === 'analyzing'
@@ -55,6 +69,7 @@ function App() {
     controller.current = current
     setError('')
     setResult(null)
+    setSourcePage(null)
     setDocument(null)
     setFile(selected)
     setStage('reading')
@@ -64,7 +79,16 @@ function App() {
       const extracted = await extractPdf(
         selected,
         current.signal,
-        (page, total) => setProgress(`Odczyt strony ${page} z ${total}`),
+        (page, total) => {
+          if (!current.signal.aborted)
+            setProgress(`Odczyt strony ${page} z ${total}`)
+        },
+        {
+          ocr: ocrEnabled,
+          onOcrProgress: (message) => {
+            if (!current.signal.aborted) setProgress(message)
+          },
+        },
       )
       if (current.signal.aborted) return
       setDocument(extracted)
@@ -91,6 +115,16 @@ function App() {
       if (current.signal.aborted) return
       setResult(response)
       setStage('done')
+      if (remember) {
+        try {
+          setHistory(saveHistory(response))
+          setHistoryMessage('Wynik zapisano wyłącznie na tym urządzeniu.')
+        } catch {
+          setHistoryMessage(
+            'Brak miejsca lub dostępu do pamięci przeglądarki. Wynik nie został zapisany; możesz pobrać JSON.',
+          )
+        }
+      }
     } catch (err) {
       if (current.signal.aborted) return
       setError(err instanceof Error ? err.message : 'Analiza nie powiodła się.')
@@ -105,6 +139,7 @@ function App() {
     setDocument(null)
     setResult(null)
     setError('')
+    setSourcePage(null)
     if (input.current) input.current.value = ''
   }
 
@@ -145,9 +180,11 @@ function App() {
             PDF odczytujemy w Twojej przeglądarce. Dopiero po kliknięciu
             „Analizuj dokument” jego tekst i nazwa trafiają przez nasz backend
             do OpenAI. Nie zapisujemy dokumentów ani wyników na naszym serwerze.
-            Nie zapisujemy ich też w historii przeglądarki. Zewnętrzny dostawca
-            stosuje własne zasady przetwarzania danych. Nie przesyłaj
-            informacji, których nie możesz udostępnić.
+            Historia jest domyślnie wyłączona. Jeśli ją włączysz, pięć ostatnich
+            wyników pozostanie w pamięci tej przeglądarki do usunięcia. OCR
+            działa lokalnie; oryginalnych plików nie zapisujemy w historii.
+            Zewnętrzny dostawca stosuje własne zasady przetwarzania danych. Nie
+            przesyłaj informacji, których nie możesz udostępnić.
           </p>
           <button
             className="button secondary"
@@ -214,6 +251,17 @@ function App() {
               <span className="small-badge">PDF · do 10 MB</span>
             </div>
             <h2 id="upload-heading">Zacznij od swojego pliku</h2>
+            <button
+              className="text-button demo-button"
+              disabled={busy}
+              onClick={() => void loadFile(demoPdf())}
+            >
+              Wypróbuj przykładowy dokument <ArrowRight size={15} />
+            </button>
+            <p className="option-help">
+              Fikcyjna faktura po angielsku. Analizę AI uruchomisz osobnym
+              przyciskiem.
+            </p>
             <input
               className="visually-hidden"
               type="file"
@@ -299,6 +347,40 @@ function App() {
                 </p>
               )}
             </div>
+            <label className="option-row">
+              <input
+                type="checkbox"
+                checked={ocrEnabled}
+                disabled={busy}
+                onChange={(event) => setOcrEnabled(event.target.checked)}
+              />
+              Odczytuj skany lokalnie (OCR: polski i angielski)
+            </label>
+            <p className="option-help">
+              Do 5 stron bez tekstu. Pierwsze użycie pobiera modele OCR; odczyt
+              może potrwać ponad 30 sekund. Obraz nie opuszcza przeglądarki.
+            </p>
+            {ocrEnabled &&
+              file &&
+              !busy &&
+              (unreadPages.length > 0 || !document) && (
+                <button
+                  className="button secondary"
+                  onClick={() => void loadFile(file)}
+                >
+                  Ponów odczyt z OCR
+                </button>
+              )}
+            {(document?.pages.reduce(
+              (sum, page) => sum + page.text.length,
+              0,
+            ) ?? 0) > 40000 && (
+              <p className="notice warning">
+                Długi dokument zostanie przeanalizowany w częściach. Scalanie
+                może potrwać do 85 sekund i zużywa większą część wspólnego
+                limitu demo.
+              </p>
+            )}
             {unreadPages.length > 0 && !result && (
               <div className="notice warning">
                 <strong>
@@ -389,8 +471,93 @@ function App() {
             </div>
           </aside>
         </div>
+        <section className="history-card" aria-labelledby="history-title">
+          <h2 id="history-title">Twoje ostatnie analizy</h2>
+          <label className="option-row">
+            <input
+              type="checkbox"
+              checked={remember}
+              onChange={(event) => {
+                try {
+                  setHistoryEnabled(event.target.checked)
+                  setRemember(event.target.checked)
+                  if (!event.target.checked) setHistory([])
+                  setHistoryMessage(
+                    event.target.checked
+                      ? 'Zapis obejmie kolejne analizy. Wyniki są dostępne dla osób korzystających z tej przeglądarki.'
+                      : 'Historia wyłączona i usunięta.',
+                  )
+                } catch {
+                  setHistoryMessage(
+                    'Przeglądarka nie pozwala zapisać ustawień historii.',
+                  )
+                }
+              }}
+            />
+            Zapisuj ostatnie 5 wyników na tym urządzeniu
+          </label>
+          <p className="option-help">
+            Bez konta i bez wysyłania historii na serwer. Wyłączenie zapisu
+            usuwa historię.
+          </p>
+          <p role="status">{historyMessage}</p>
+          {history.length > 0 && (
+            <>
+              <ul className="history-list">
+                {history.map((entry) => (
+                  <li key={entry.id}>
+                    <button
+                      className="text-button"
+                      disabled={busy}
+                      onClick={() => {
+                        reset()
+                        setResult(entry.result)
+                        setStage('done')
+                      }}
+                    >
+                      {entry.result.analysis.document.fileName}
+                      <small>
+                        {new Date(entry.savedAt).toLocaleString('pl-PL')}
+                      </small>
+                    </button>
+                    <button
+                      className="icon-button"
+                      aria-label={`Usuń analizę ${entry.result.analysis.document.fileName}`}
+                      onClick={() => {
+                        try {
+                          setHistory(deleteHistory(entry.id))
+                        } catch {
+                          setHistoryMessage('Nie udało się usunąć historii.')
+                        }
+                      }}
+                    >
+                      <X size={16} />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              <button
+                className="text-button"
+                onClick={() => {
+                  try {
+                    setHistory(deleteHistory())
+                    setHistoryMessage('Historia usunięta.')
+                  } catch {
+                    setHistoryMessage('Nie udało się usunąć historii.')
+                  }
+                }}
+              >
+                Usuń całą historię
+              </button>
+            </>
+          )}
+        </section>
         {result ? (
-          <Results key={result.meta.durationMs} result={result} />
+          <Results
+            key={result.meta.durationMs}
+            result={result}
+            onSource={file ? setSourcePage : undefined}
+          />
         ) : (
           <div className="empty-result">
             <ScanText size={20} />
@@ -399,12 +566,19 @@ function App() {
           </div>
         )}
       </main>
+      {file && sourcePage !== null && (
+        <SourceViewer
+          file={file}
+          page={sourcePage}
+          onClose={() => setSourcePage(null)}
+        />
+      )}
       <footer className="page-footer">
         <span>
           PDF Insight <span className="footer-dot">/</span> Dokumenty pod
           kontrolą.
         </span>
-        <span>Warstwa tekstowa · Bez rejestracji</span>
+        <span>Tekst i lokalny OCR · Bez rejestracji</span>
       </footer>
     </div>
   )
