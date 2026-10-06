@@ -15,7 +15,7 @@ const languages = new Set(
 const currencies = new Set(Intl.supportedValuesOf('currency'))
 export const isCurrency = (code: string) => currencies.has(code)
 
-export const analysisShape = z.object({
+const analysisShape = z.object({
   document: z.object({
     fileName: z.string().min(1).max(255),
     pages: z.number().int().min(1).max(MAX_PAGES),

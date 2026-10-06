@@ -18,6 +18,7 @@ import { analyzeDocument } from './api/client'
 import { Results } from './components/Results'
 import { SourceViewer } from './components/SourceViewer'
 import { demoPdf } from './lib/demo'
+import { UserFacingError } from './lib/errors'
 import {
   deleteHistory,
   historyEnabled,
@@ -97,7 +98,9 @@ function App() {
     } catch (err) {
       if (current.signal.aborted) return
       setError(
-        err instanceof Error ? err.message : 'Nie można odczytać dokumentu.',
+        err instanceof UserFacingError
+          ? err.message
+          : 'Nie można odczytać dokumentu. Plik może być uszkodzony lub nieobsługiwany.',
       )
       setStage('error')
     }
