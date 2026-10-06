@@ -23,6 +23,10 @@ export default tseslint.config(
     },
   },
   {
+    files: ['worker/**/*.ts'],
+    rules: { 'no-console': ['error', { allow: ['warn'] }] },
+  },
+  {
     files: ['src/**/*.{ts,tsx}'],
     plugins: { 'react-hooks': hooks },
     rules: hooks.configs.recommended.rules,

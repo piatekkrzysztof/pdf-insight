@@ -99,6 +99,8 @@ describe('analysis contract', () => {
         modelSchema.safeParse({
           ...exampleAnalysis,
           summarySentences: Array(length).fill('Zdanie.'),
+          amounts: [],
+          dates: [],
         }).success,
       ).toBe(false)
     expect(
@@ -109,6 +111,8 @@ describe('analysis contract', () => {
           'Kwota to 184 500 PLN.',
           'To trzecie zdanie.',
         ],
+        amounts: [],
+        dates: [],
       }).success,
     ).toBe(true)
   })

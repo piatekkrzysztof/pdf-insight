@@ -94,7 +94,22 @@ export type Analysis = z.infer<typeof analysisSchema>
 // It is converted to the required public summary string by the backend.
 export const modelSchema = analysisShape.omit({ summary: true }).extend({
   summarySentences: z.array(z.string().min(1).max(1000)).min(3).max(5),
+  amounts: z
+    .array(
+      analysisShape.shape.amounts.element.extend({
+        sourcePage: z.number().int().positive(),
+      }),
+    )
+    .max(100),
+  dates: z
+    .array(
+      analysisShape.shape.dates.element.extend({
+        sourcePage: z.number().int().positive(),
+      }),
+    )
+    .max(100),
 })
+export type ModelAnalysis = z.infer<typeof modelSchema>
 
 export const requestSchema = z
   .object({

@@ -10,6 +10,14 @@ vi.mock('openai', () => ({
 }))
 const modelOutput = {
   ...exampleAnalysis,
+  amounts: exampleAnalysis.amounts.map((amount) => ({
+    ...amount,
+    sourcePage: 1,
+  })),
+  dates: exampleAnalysis.dates.map((date) => ({
+    ...date,
+    sourcePage: 1,
+  })),
   summarySentences: [
     'Umowa dotyczy CRM.',
     'Wynagrodzenie wynosi 184 500 PLN.',
@@ -50,6 +58,33 @@ describe('AI boundary', () => {
     ).rejects.toThrow('po dwóch próbach')
     expect(create).toHaveBeenCalledTimes(2)
   })
+  it('sends the prior invalid analysis back for a targeted repair', async () => {
+    const invalid = {
+      ...modelOutput,
+      amounts: [{ ...modelOutput.amounts[0], value: 42600 }],
+    }
+    create
+      .mockResolvedValueOnce({
+        status: 'completed',
+        output_text: JSON.stringify(invalid),
+      })
+      .mockResolvedValueOnce({
+        status: 'completed',
+        output_text: JSON.stringify(modelOutput),
+      })
+    await analyze(
+      exampleRequest,
+      'test-key',
+      'test-model',
+      new AbortController().signal,
+    )
+    const repair = create.mock.calls[1][0]
+    expect(JSON.parse(repair.input[0].content).previousAnalysis).toEqual(
+      invalid,
+    )
+    expect(repair.instructions).toContain('amounts[0]')
+    expect(repair.temperature).toBe(0)
+  })
   it('does not retry transport failures or send secrets into document content', async () => {
     create.mockRejectedValue(new Error('network'))
     await expect(
@@ -73,7 +108,7 @@ describe('AI boundary', () => {
       {
         ...exampleRequest,
         pages: [
-          { number: 1, text: injection },
+          { number: 1, text: exampleRequest.pages[0].text + '\n' + injection },
           { number: 2, text: '' },
         ],
       },
