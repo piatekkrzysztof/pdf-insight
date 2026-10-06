@@ -426,6 +426,9 @@
 .notice strong {
   display: block;
 }
+.notice .ocr-cta {
+  margin-top: 10px;
+}
 .warning {
   background: #fff8e5;
   color: #715219;

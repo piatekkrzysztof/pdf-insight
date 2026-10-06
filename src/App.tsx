@@ -63,7 +63,8 @@ function App() {
     return () => clearInterval(timer)
   }, [stage])
 
-  async function loadFile(selected: File) {
+  // OCR is passed explicitly: a state update is not visible in this closure.
+  async function loadFile(selected: File, ocr = ocrEnabled) {
     controller.current?.abort()
     const current = new AbortController()
     controller.current = current
@@ -84,7 +85,7 @@ function App() {
             setProgress(`Odczyt strony ${page} z ${total}`)
         },
         {
-          ocr: ocrEnabled,
+          ocr,
           onOcrProgress: (message) => {
             if (!current.signal.aborted) setProgress(message)
           },
@@ -388,6 +389,19 @@ function App() {
                 </strong>{' '}
                 Nie znaleziono wystarczającej ilości tekstu. Mogą zawierać skan
                 lub ważny aneks. Analiza obejmie tylko odczytaną treść.
+                {file && !ocrEnabled && !busy && (
+                  <button
+                    className="button secondary ocr-cta"
+                    onClick={() => {
+                      setOcrEnabled(true)
+                      void loadFile(file, true)
+                    }}
+                  >
+                    <ScanText size={16} /> Odczytaj{' '}
+                    {unreadPages.length === 1 ? 'tę stronę' : 'te strony'}{' '}
+                    lokalnie (OCR)
+                  </button>
+                )}
               </div>
             )}
             {error && (

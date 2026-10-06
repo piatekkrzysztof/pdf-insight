@@ -130,6 +130,15 @@ test('provided recruitment PDF detects the unreadable annex', async ({
   await expect(
     page.getByRole('button', { name: 'Analizuj dokument' }),
   ).toBeEnabled()
+  // The warning offers OCR directly, without finding the option first.
+  test.setTimeout(120_000)
+  await page
+    .getByRole('button', { name: 'Odczytaj tę stronę lokalnie (OCR)' })
+    .click()
+  await expect(page.getByLabel('Odczytuj skany lokalnie')).toBeChecked()
+  await expect(page.getByText('Niepełny odczyt: strony 11.')).toBeHidden({
+    timeout: 110_000,
+  })
 })
 
 test('demo, opt-in history, source preview and accessible results', async ({
