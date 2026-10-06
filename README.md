@@ -12,12 +12,17 @@ Deployed on GitHub Pages with a Cloudflare Worker backend. Evaluated with the su
 
 ```text
 Browser: file validation → PDF.js text extraction (page numbers preserved)
+    → optional local OCR (Tesseract, pol+eng) for pages without a text layer
     → explicit Analyze action
 Cloudflare Worker: origin + request limits → input validation
+    → shared daily AI quota (Durable Object)
+    → texts over 40,000 chars: verified excerpts from up to 3 chunks
     → OpenAI Responses API (structured output, store:false, no tools)
     → Zod validation → one repair attempt if invalid
-    → exact-quote verification → validated result
+    → amount/date/quote verification against page text
+    → server-side notice about unread pages → validated result
 Browser: response validation → readable view / JSON download
+    → opt-in local history, original page preview for quotes
 ```
 
 The PDF stays in the browser. Extracted text and filename are sent to OpenAI through the Worker only when the user starts analysis. The application does not persist documents or results and does not log document content. OpenAI processing/retention policies still apply; `store:false` does not imply zero provider retention.
@@ -25,8 +30,8 @@ The PDF stays in the browser. Extracted text and filename are sent to OpenAI thr
 ### Project structure
 
 ```text
-src/components/   Result views
-src/lib/          PDF reading and file validation
+src/components/   Result views and source page preview
+src/lib/          PDF reading, local OCR, history, demo PDF
 src/api/          Browser API client
 shared/           Zod schemas and test fixtures
 worker/           Cloudflare endpoint, OpenAI adapter and prompt
@@ -43,7 +48,10 @@ docs/             Screenshots and acceptance checklist
 - Required brief fields remain unchanged. `sources` and exported `analysisMeta` add traceability and explicitly mark incomplete extraction.
 - Source quotes must occur on the referenced page after whitespace/Unicode normalization; unsupported quotes are removed. Amounts must match a complete printed number on the claimed page; dates must match their literal source. Unsupported amounts/dates trigger one repair attempt, then an error. These checks do not prove that context, currency or the model's interpretation is correct.
 - PDF content is untrusted. It is isolated from system instructions, and the model has no tools. The supplied document's hidden instruction to claim invalidity and a 1 PLN value was ignored in the observed live responses. This is a test result, not a guarantee against all prompt injection.
-- No OCR in this version. Pages with fewer than 30 extracted characters are flagged. This heuristic can also flag genuinely short/blank pages and cannot detect every image embedded within a text-bearing page.
+- Pages with fewer than 30 extracted characters are flagged as unread. The warning offers local OCR in one click (Tesseract in the browser, Polish and English, up to 5 pages; first use downloads about 9.5 MB of models from the same Pages site). The image never leaves the browser; OCR text is marked and should be checked against the original.
+- Completeness is never left to the model. After a live response called the scanned annex "empty", the Worker builds the unread-page sentence itself from the extraction result and removes model sentences that contradict it.
+- Long documents (over 40,000 characters) are split into up to 3 chunks. Each chunk returns verbatim excerpts, which are verified against the page text and merged into one final analysis. Every split costs extra AI calls, so it counts more against the daily quota.
+- History is off by default. When enabled, the last 5 validated results stay in this browser's localStorage; original PDFs are never stored.
 
 ## Local setup
 
@@ -89,7 +97,7 @@ npm run build
 npm run test:e2e
 ```
 
-E2E uses installed Google Chrome (`channel: chrome`). If absent, install the Playwright Chrome channel with `npx playwright install chrome` or adapt the config to a locally installed browser. E2E uses a real in-memory PDF and a controlled API response, not a live model.
+Locally E2E uses installed Google Chrome (`channel: chrome`); GitHub Actions runs it with Playwright Chromium (`E2E_BROWSER=chromium`) before every deploy. E2E uses real PDFs (including a generated scan for OCR) and a controlled API response, not a live model. Live model checks are a separate, explicit opt-in: `scripts/evaluate.mjs` spends API quota and never runs in CI.
 
 Optional local test with the supplied recruitment PDF, PowerShell:
 
@@ -123,16 +131,16 @@ Changing the repository name requires updating the production `base` in `vite.co
 
 ## Limits and security
 
-- File: 10,000,000 bytes, maximum 100 pages and 100,000 text characters. Oversized text is rejected explicitly, never silently truncated. Chunking is a future enhancement.
+- File: 10,000,000 bytes, maximum 100 pages and 100,000 text characters. Oversized text is rejected explicitly, never silently truncated.
 - Backend body: 500,000 bytes enforced while reading the stream, independent of Content-Length. The original file-size value is client-supplied because the backend receives text, so the body/text limits provide the actual server boundary.
-- Cloudflare limits: 5 requests/client/minute and 30 aggregate requests/minute per Cloudflare location. These are not a strict global spending cap. Configure a separate project budget/usage control with the AI provider before public deployment.
+- Cloudflare limits: 5 requests/client/minute and 30 aggregate requests/minute per Cloudflare location, plus a shared daily cap of `DAILY_AI_CALL_LIMIT` (100) AI call units reserved transactionally in a Durable Object before any provider request. A normal analysis reserves 2 units (call + possible repair). The cap protects the API budget; it also means heavy use by one client can exhaust the demo for the rest of the UTC day.
 - CORS is restricted but is not authentication and cannot prevent a non-browser caller spoofing Origin.
-- AI deadline: 25 seconds for the whole analysis, including a maximum of one format-repair attempt. Browser request timeout: 28 seconds. This bounds failures; it does not guarantee every valid document will finish in under 30 seconds.
-- No OCR, persistence/history or long-document chunking yet. Password-protected files must be unlocked first.
+- AI deadline: 25 seconds for a normal analysis, including a maximum of one repair attempt (browser timeout 28 s); 85 seconds for chunked documents (browser 90 s). A slow first response leaves little time for the repair, so a timeout is possible. Long documents exceed the 30-second target and the UI says so before analysis.
+- Password-protected files must be unlocked first.
 - Tables and multi-column layouts may extract imperfectly. The app flags unreadable pages but does not claim complete visual understanding of all pages.
 - No API keys in `VITE_*`, no document logs, no HTML rendering of model content, no model tools or web access.
 - An AI-generated result requires source verification before consequential decisions.
 
 ## AI collaboration
 
-See [AI_LOG.md](AI_LOG.md) for actual prompts, live evaluation mistakes, corrections and verification boundaries. The automated suite has 34 unit/integration tests; browser tests use controlled responses, while separately recorded live evaluations use the real model.
+See [AI_LOG.md](AI_LOG.md) for actual prompts, live evaluation mistakes, corrections and verification boundaries. The automated suite has 50 unit/integration tests and 7 browser tests (2 of them optional, using the supplied PDF locally); browser tests use controlled responses, while separately recorded live evaluations use the real model.
