@@ -1,6 +1,9 @@
 import OpenAI from 'openai'
 import { MAX_REQUEST_BYTES, requestSchema } from '../shared/schema'
-import { analyze, ApiError } from './analyze'
+import { ApiError } from './analyze'
+import { analyzeChunks, splitPages } from './chunks'
+import type { QuotaNamespace } from './quota'
+export { DailyQuota } from './quota'
 
 interface RateLimiter {
   limit(options: { key: string }): Promise<{ success: boolean }>
@@ -11,6 +14,7 @@ export interface Env {
   ALLOWED_ORIGIN: string
   CLIENT_LIMITER: RateLimiter
   GLOBAL_LIMITER: RateLimiter
+  DAILY_QUOTA: QuotaNamespace
 }
 
 async function readBody(request: Request) {
@@ -101,11 +105,38 @@ export default {
           'Niepoprawne dane PDF. Limit: 10 MB, 100 stron i 100 000 znaków tekstu.',
         )
       const data = parsed.data
+      const chunkCount = splitPages(data.pages).length
+      if (chunkCount > 3)
+        throw new ApiError(400, 'Podziel dokument na mniejsze pliki.')
+      if (!env.DAILY_QUOTA)
+        throw new ApiError(
+          503,
+          'Limit dobowy nie jest skonfigurowany. Spróbuj później.',
+        )
+      const quota = env.DAILY_QUOTA.get(env.DAILY_QUOTA.idFromName('global-v1'))
+      const reserved = await quota.fetch(
+        new Request('https://quota/reserve', {
+          method: 'POST',
+          body: JSON.stringify({
+            units: chunkCount > 1 ? 2 * (chunkCount + 1) : 2,
+          }),
+        }),
+      )
+      if (reserved.status === 429)
+        throw new ApiError(
+          429,
+          'Wspólny dobowy limit demo został wykorzystany. Spróbuj po północy UTC.',
+        )
+      if (!reserved.ok)
+        throw new ApiError(
+          503,
+          'Nie można sprawdzić limitu demo. Spróbuj później.',
+        )
       const signal = AbortSignal.any([
         request.signal,
-        AbortSignal.timeout(25_000),
+        AbortSignal.timeout(chunkCount > 1 ? 85_000 : 25_000),
       ])
-      const analysis = await analyze(
+      const { analysis, chunks } = await analyzeChunks(
         data,
         env.OPENAI_API_KEY,
         env.OPENAI_MODEL || 'gpt-4.1-mini',
@@ -121,6 +152,10 @@ export default {
           unreadPages,
           durationMs: Date.now() - started,
           model: env.OPENAI_MODEL || 'gpt-4.1-mini',
+          chunks,
+          ocrPages: data.pages
+            .filter((page) => page.ocrConfidence !== undefined)
+            .map((page) => page.number),
         },
       })
     } catch (error) {

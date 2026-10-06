@@ -120,6 +120,7 @@ export const requestSchema = z
         z.object({
           number: z.number().int().positive(),
           text: z.string().max(MAX_TEXT_CHARS),
+          ocrConfidence: z.number().min(0).max(100).optional(),
         }),
       )
       .min(1)
@@ -152,6 +153,8 @@ export const responseSchema = z.object({
     unreadPages: z.array(z.number().int().positive()),
     durationMs: z.number().nonnegative(),
     model: z.string(),
+    ocrPages: z.array(z.number().int().positive()).optional(),
+    chunks: z.number().int().positive().optional(),
   }),
 })
 export type AnalysisResponse = z.infer<typeof responseSchema>

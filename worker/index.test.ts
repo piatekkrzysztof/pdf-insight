@@ -14,6 +14,10 @@ function env(): Env {
     ALLOWED_ORIGIN: origin,
     CLIENT_LIMITER: { limit: vi.fn().mockResolvedValue({ success: true }) },
     GLOBAL_LIMITER: { limit: vi.fn().mockResolvedValue({ success: true }) },
+    DAILY_QUOTA: {
+      idFromName: (name) => name,
+      get: () => ({ fetch: async () => Response.json({ success: true }) }),
+    },
   }
 }
 function request(data: unknown = exampleRequest, requestOrigin = origin) {
@@ -25,6 +29,14 @@ function request(data: unknown = exampleRequest, requestOrigin = origin) {
 }
 
 describe('public API', () => {
+  it('fails closed before AI when the global daily budget is exhausted', async () => {
+    const settings = env()
+    settings.DAILY_QUOTA.get = () => ({
+      fetch: async () => new Response(null, { status: 429 }),
+    })
+    expect((await worker.fetch(request(), settings)).status).toBe(429)
+    expect(analyze).not.toHaveBeenCalled()
+  })
   beforeEach(() => {
     vi.mocked(analyze).mockReset()
     vi.mocked(analyze).mockResolvedValue(exampleAnalysis)
