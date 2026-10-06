@@ -62,6 +62,27 @@ describe('AI boundary', () => {
     ).rejects.toThrow('po dwóch próbach')
     expect(create).toHaveBeenCalledTimes(2)
   })
+  it('omits numbers without a real currency instead of failing the analysis', async () => {
+    // Observed live: a technical report without money got invented codes.
+    create.mockResolvedValue({
+      status: 'completed',
+      output_text: JSON.stringify({
+        ...modelOutput,
+        amounts: [
+          ...modelOutput.amounts,
+          { value: 500, currency: 'ABC', context: 'liczba', sourcePage: 1 },
+        ],
+      }),
+    })
+    const result = await analyze(
+      exampleRequest,
+      'test-key',
+      'test-model',
+      new AbortController().signal,
+    )
+    expect(create).toHaveBeenCalledTimes(1)
+    expect(result.amounts.map((amount) => amount.currency)).toEqual(['PLN'])
+  })
   it('omits amounts still absent from their page after the repair attempt', async () => {
     const ungrounded = {
       ...modelOutput,

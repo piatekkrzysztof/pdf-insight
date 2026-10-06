@@ -2,6 +2,7 @@ import OpenAI from 'openai'
 import { zodTextFormat } from 'openai/helpers/zod'
 import {
   analysisSchema,
+  isCurrency,
   modelSchema,
   type Analysis,
   type AnalysisRequest,
@@ -122,8 +123,17 @@ export async function analyze(
       raw = null
     }
     const modelResult = modelSchema.safeParse(raw)
-    if (modelResult.success)
-      modelResult.data = alignDatePages(modelResult.data, request)
+    if (modelResult.success) {
+      const aligned = alignDatePages(modelResult.data, request)
+      // A number without a real ISO 4217 currency is not a monetary amount;
+      // omitting it is safer than failing the whole analysis.
+      modelResult.data = {
+        ...aligned,
+        amounts: aligned.amounts.filter((amount) =>
+          isCurrency(amount.currency),
+        ),
+      }
+    }
     const unsupported = modelResult.success
       ? groundingErrors(modelResult.data, request)
       : []
