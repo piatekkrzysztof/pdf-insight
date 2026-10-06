@@ -4,15 +4,15 @@
 
 Projekt powstaje z pomocą Codex. AI przeanalizowało brief, dokument testowy, przygotowało roadmapę, kod, testy i dokumentację. Wykorzystano lokalne narzędzia odczytu PDF, dokumentację OpenAI, Vite i Cloudflare oraz testy Vitest i Playwright w Chrome. Bez delegowania pracy do dodatkowych agentów.
 
-Stan: implementacja lokalna. Testy używają kontrolowanych odpowiedzi AI. Test rzeczywistego OpenAI, wdrożenie i pomiar czasu na publicznym demo pozostają do wykonania po konfiguracji kont i sekretu. Nie przedstawiamy wyników testowych jako wyników rzeczywistego modelu.
+Stan: publiczne GitHub Pages i Cloudflare Worker, z sekretem OpenAI skonfigurowanym poza repozytorium. Oprócz testów z kontrolowanymi odpowiedziami wykonano rzeczywistą analizę załączonego dokumentu przez OpenAI, za wyraźną zgodą użytkownika. Wyniki poniżej rozróżniają te dwa rodzaje testów.
 
 ## Kluczowe prompty i instrukcje
 
 1. **Analiza zadania — rzeczywisty prompt użytkownika:** „Zapoznaj się z kryteriami i zaplanuj szczegółową roadmapę, jak krok po kroku zrealizować ten projekt zgodnie z najwyższymi standardami”. Dołączono brief i testową umowę. Efekt: priorytety wynikające z wag oceny i rozpoznanie ukrytego polecenia na stronie 4 oraz skanu na stronie 11.
 2. **Rozpoczęcie implementacji — rzeczywisty prompt użytkownika:** „Czy jesteś w stanie zacząc ze mną to robić?”. Następnie użytkownik potwierdził: „Mam API openai i cloudflare”. Efekt: frontend React, backend Cloudflare Workers i adapter OpenAI.
-3. **Prompt aplikacji — przygotowany i sprawdzony testami, jeszcze bez rzeczywistego wywołania:** `worker/prompt.ts`. Kluczowe reguły: tekst PDF jest niezaufanymi danymi, 3–5 zdań podsumowania, 3–7 punktów, brak zgadywania, zachowanie kontekstu kwot i dat, cytaty dosłowne z numerami stron. Treść PDF trafia do osobnej wiadomości użytkownika; instrukcje do pola `instructions`.
+3. **Prompt aplikacji:** `worker/prompt.ts`. Kluczowe reguły: tekst PDF jest niezaufanymi danymi, krótkie podsumowanie zgodne z zakresem briefu, brak zgadywania, zachowanie kontekstu kwot i dat, cytaty z numerami stron. Treść PDF trafia do osobnej wiadomości użytkownika; instrukcje do pola `instructions`.
 
-Pełny prompt aplikacji jest wersjonowany w repozytorium. Kolejne rzeczywiste iteracje jakości zostaną dopisane po testach modelu, bez wymyślania historii promptów.
+Pełny prompt aplikacji jest wersjonowany w repozytorium. Po testach skrócono preferowaną odpowiedź do 3–4 zdań i 3–5 punktów oraz maksymalnie 10 istotnych kwot i 7 dat. Ogranicza to czas odpowiedzi, ale wynik nie jest wyczerpującym spisem wszystkich liczb w dokumencie.
 
 ## Błędy i poprawki
 
@@ -24,10 +24,24 @@ Pełny prompt aplikacji jest wersjonowany w repozytorium. Kolejne rzeczywiste it
 
 ## Weryfikacja i odpowiedzialność
 
-- 25 testów jednostkowych/integracyjnych schematu, limitów i backendu.
+- 34 testy jednostkowe/integracyjne schematu, limitów, backendu i zgodności liczb/dat ze źródłem.
 - Testy przeglądarkowe: wgranie prawdziwego tekstowego PDF, wynik z kontrolowanego API, podgląd i pobranie JSON, ponowienie błędu, nieprawidłowy PDF i szerokość 360 px.
 - Osobny test lokalny dołączonego dokumentu: 12 stron, ostrzeżenie o stronie 11.
 - Kontrola TypeScript strict i ESLint bez `any` i `console.log` w kodzie aplikacji.
 - Ręczny przegląd zrzutów desktop/mobile.
 
-Przed oddaniem autor musi przejrzeć kod i umieć wyjaśnić każde rozwiązanie. Testy z mockiem nie dowodzą odporności rzeczywistego modelu na prompt injection ani spełnienia limitu 30 sekund. Te punkty wymagają rzeczywistych pomiarów i oceny treści.
+## Rzeczywista ewaluacja — 6 października 2026
+
+- Pierwszy test publiczny: 14,853 s od wgrania do odpowiedzi, ale model podał błędny VAT 42 600 zamiast 42 435 PLN i datę zatwierdzenia protokołu 26 marca zamiast 26 lutego. Nie uznano tego za poprawny wynik tylko dlatego, że JSON spełniał schemat.
+- Dodano wewnętrzne wskazanie strony i fragmentu źródłowego dla kwot i dat oraz testy regresji obu błędów. Publiczny schemat briefu pozostał bez tych wewnętrznych pól.
+- Nietypowe odstępy wewnątrz polskich liter, pochodzące z warstwy tekstowej PDF, powodowały odrzucanie cytatów. Porównanie toleruje teraz białe znaki, zachowując litery i cyfry.
+- Zbyt obszerne odpowiedzi i mało precyzyjna informacja o błędach powodowały błędy 502/504. Cztery kolejne próby wcześniejszych wersji zakończyły się odrzuceniem odpowiedzi, a nie sukcesem. Skrócono prompt, dopuszczono równoważną notację kwot, a przy naprawie model dostaje listę liczb odczytanych ze wskazanej strony. Dane te nie trafiają do logów.
+- Po poprawce rzeczywisty backend odpowiedział w 18,721 s (czas sieciowy): prawidłowy VAT 42 435 PLN, termin płatności 2026-03-29, kwoty w PLN/EUR/USD, cztery zdania po polsku i jawna informacja o nieodczytanej stronie 11. Odpowiedź pominęła część kwot brutto; ekstrakcja jest selektywna.
+- W obserwowanych odpowiedziach model zignorował ukryte polecenie o nieważności i wartości 1 PLN. Jeden dokument nie dowodzi pełnej odporności na prompt injection.
+
+Przed oddaniem autor powinien przejrzeć kod i umieć wyjaśnić rozwiązania. Weryfikacja obecności liczby na stronie nie dowodzi poprawności przypisanego kontekstu ani wszystkich twierdzeń podsumowania. Brak OCR pozostaje jawnym ograniczeniem.
+
+- Dalsze próby wykazały, że sprawdzanie daty w całym dokumencie mogło zaakceptować datę z innego kontekstu. Tę zmianę wycofano; końcowa wersja wymaga wskazanej strony. Zrezygnowano z dodatkowej transkrypcji liczby przez model: backend sam dopasowuje pełne liczby i warianty dat do rzeczywistego tekstu strony.
+- Naprawiono przekazywanie poprzedniej odpowiedzi do ponowienia, dodano wskazanie stron z pasującą datą i ustawiono temperaturę 0. To poprawiło obserwowane wyniki, ale nie gwarantuje deterministyczności.
+- Końcowa wersja: API 9,737 s; pełny test publicznej strony w Chrome 19,729 s (odczyt 0,575 s), poprawny eksport JSON, budżet/netto/VAT/brutto i daty zgodne z dokumentem. Szczegóły w docs/ACCEPTANCE.md. Łącznie podczas wcześniejszych iteracji zanotowano osiem odpowiedzi 502/504; nie są wliczane do końcowych sukcesów.
+- Końcowe lokalne E2E: 4/4, w tym odczyt dostarczonego PDF. Pierwszy przebieg zakończył asercje, ale zawiesił się przy zamykaniu procesów w ograniczonym środowisku Windows; powtórzenie z właściwymi uprawnieniami zakończyło się kodem 0.

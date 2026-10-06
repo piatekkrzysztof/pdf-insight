@@ -1,6 +1,6 @@
 # Kryteria odbioru
 
-## Stan lokalny
+## Stan wydania — 6 października 2026
 
 - [x] React + Vite, TypeScript strict, ESLint, Prettier.
 - [x] Wgrywanie przez wybór i drag & drop, limit 10 MB.
@@ -12,12 +12,29 @@
 - [x] Kontrola CORS, rozmiaru body, limitów żądań i timeoutów.
 - [x] Testy jednostkowe i podstawowe E2E.
 - [x] Sprawdzenie 360 px i desktopu.
-- [ ] Klucz OpenAI skonfigurowany lokalnie i w Cloudflare.
-- [ ] Analiza rzeczywistego modelu: jakość, 3–5 zdań, język, brak wpływu prompt injection.
-- [ ] Publiczny backend i GitHub Pages.
-- [ ] Kilka pomiarów end-to-end poniżej 30 s, zapis rzeczywistych wyników.
-- [ ] Publiczne linki i kontrola historii Git pod kątem sekretów.
+- [x] Klucz OpenAI skonfigurowany jako sekret w Cloudflare. Konfiguracja lokalna jest opcjonalna.
+- [x] Analiza rzeczywistego modelu: cztery zdania po polsku, zweryfikowane główne kwoty i daty; ukryte polecenie z pliku testowego zignorowane w obserwowanych wynikach.
+- [x] Publiczny backend i GitHub Pages.
+- [x] Zapis pomiarów rzeczywistego API i pełnej ścieżki przeglądarkowej poniżej 30 s; szczegóły i nieudane próby poniżej.
+- [x] Publiczne linki i kontrola początkowej historii Git pod kątem sekretów.
 - [ ] Utrzymanie działającego demo przez 14 dni.
+
+Repozytorium: https://github.com/piatekkrzysztof/pdf-insight
+
+Demo: https://piatekkrzysztof.github.io/pdf-insight/
+
+### Pomiary i ocena końcowej wersji
+
+| Próba                                             | Czas     | Wynik                                                       |
+| ------------------------------------------------- | -------- | ----------------------------------------------------------- |
+| Publiczny backend, rzeczywiste OpenAI             | 9,737 s  | HTTP 200, poprawne główne kwoty i okres umowy               |
+| Publiczne Pages, Chrome, od wgrania do odpowiedzi | 19,729 s | HTTP 200, odczyt PDF 0,575 s, poprawny wynik i pobrany JSON |
+
+W drugim teście potwierdzono budżet 250 000 PLN, wynagrodzenie netto 184 500 PLN, VAT 42 435 PLN, brutto 226 935 PLN, abonament 12 300/15 129 PLN, 8 600 EUR rocznie, 890 USD miesięcznie, okres umowy 2026-04-01–2028-03-31 i termin płatności 2026-03-29. Eksport zachował oznaczenie częściowej analizy i stronę 11 jako nieodczytaną. Brak błędów JavaScript w przeglądarce. Zrzut i pełny eksport testowy zachowano lokalnie, poza repozytorium.
+
+To mała próbka jednego dokumentu, nie gwarancja czasu ani poprawności dla każdego PDF. Wcześniejsze wersje miały błędy kwot/dat oraz osiem odpowiedzi 502/504 podczas iteracji; opis korekt znajduje się w AI_LOG.md. Wynik jest selektywny: nie zawiera każdej ceny i daty, a część niepotwierdzonych cytatów jest usuwana. Nie odczytuje skanu aneksu ani nie dowodzi pełnej odporności na prompt injection.
+
+Właściciel powinien utrzymać Pages, Worker i dostępne środki API co najmniej do 20 października 2026. Upływ 14 dni pozostaje przyszłym warunkiem. Limity wydatków ustawione przez właściciela nie były niezależnie audytowane w panelu dostawcy.
 
 ## Oczekiwane fakty: umowa 14/2026
 
