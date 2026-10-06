@@ -30,6 +30,21 @@ import './App.css'
 
 type Stage = 'empty' | 'reading' | 'ready' | 'analyzing' | 'done' | 'error'
 
+function formatSize(bytes: number) {
+  return bytes < 100_000
+    ? `${Math.max(1, Math.round(bytes / 1000))} kB`
+    : `${(bytes / 1_000_000).toFixed(2)} MB`
+}
+
+function pagesLabel(count: number) {
+  const tens = count % 100
+  const units = count % 10
+  if (count === 1) return '1 strona'
+  if (units >= 2 && units <= 4 && (tens < 12 || tens > 14))
+    return `${count} strony`
+  return `${count} stron`
+}
+
 function App() {
   const [stage, setStage] = useState<Stage>('empty')
   const [file, setFile] = useState<File | null>(null)
@@ -304,8 +319,8 @@ function App() {
                   </div>
                   <strong className="file-name">{file.name}</strong>
                   <span className="file-info">
-                    {(file.size / 1_000_000).toFixed(2)} MB
-                    {document ? ` · ${document.pages.length} stron` : ''}
+                    {formatSize(file.size)}
+                    {document ? ` · ${pagesLabel(document.pages.length)}` : ''}
                   </span>
                   <button
                     className="text-button"
