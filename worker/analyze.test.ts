@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { exampleAnalysis, exampleRequest } from '../shared/fixtures'
-import { analyze, validateEvidence } from './analyze'
+import { analyze, applyUnreadNotice, validateEvidence } from './analyze'
 
 const { create } = vi.hoisted(() => ({ create: vi.fn() }))
 vi.mock('openai', () => ({
@@ -44,7 +44,11 @@ describe('AI boundary', () => {
     )
     expect(create).toHaveBeenCalledTimes(2)
     expect(result.amounts[0].value).toBe(184500)
-    expect(result.summary).toBe(modelOutput.summarySentences.join(' '))
+    // The fixture's page 2 has no text, so the server appends its notice.
+    expect(result.summary).toBe(
+      modelOutput.summarySentences.join(' ') +
+        ' Analiza jest niepełna: nie odczytano tekstu ze strony 2 (prawdopodobnie skan), więc jej treść nie została uwzględniona.',
+    )
   })
   it('fails after exactly two invalid responses', async () => {
     create.mockResolvedValue({ status: 'completed', output_text: 'invalid' })
@@ -120,6 +124,53 @@ describe('AI boundary', () => {
     expect(call.instructions).not.toContain(injection)
     expect(call.input[0].content).toContain(injection)
     expect(call.store).toBe(false)
+  })
+  it('replaces a model claim that an unread scan is empty with a server notice', () => {
+    // Observed live on 6 October 2026 for the scanned annex on page 11.
+    const claim =
+      'Analiza dokumentu jest kompletna z wyjątkiem strony 11, która jest pusta i nie zawiera informacji.'
+    const result = applyUnreadNotice(
+      [
+        'Umowa ramowa została zawarta 12 marca 2026 roku.',
+        'Wynagrodzenie wynosi 184 500 PLN netto.',
+        'Umowa obowiązuje od 1 kwietnia 2026 roku.',
+        claim,
+      ],
+      [
+        'Umowa dotyczy CRM.',
+        'Budżet 250 000 PLN.',
+        'Okres 24 miesiące.',
+        claim,
+      ],
+      [11],
+      'pl',
+    )
+    expect(result.summary).not.toMatch(/pusta|kompletna/)
+    expect(result.summary).toMatch(
+      /Wynagrodzenie wynosi 184 500 PLN netto\. .*Analiza jest niepełna: nie odczytano tekstu ze strony 11 \(prawdopodobnie skan\)/,
+    )
+    expect(result.keyPoints).toHaveLength(4)
+    expect(result.keyPoints[3]).toContain('Analiza jest niepełna')
+  })
+  it('keeps the summary unchanged when every page was read', () => {
+    const result = applyUnreadNotice(
+      ['A.', 'B.', 'C.'],
+      ['x', 'y', 'z'],
+      [],
+      'en',
+    )
+    expect(result).toEqual({ summary: 'A. B. C.', keyPoints: ['x', 'y', 'z'] })
+  })
+  it('caps the summary at five sentences including the English notice', () => {
+    const result = applyUnreadNotice(
+      ['A.', 'B.', 'C.', 'D.', 'E.'],
+      ['x', 'y', 'z'],
+      [3, 4],
+      'en',
+    )
+    expect(result.summary).toBe(
+      'A. B. C. D. The analysis is incomplete: no text could be extracted from pages 3, 4 (likely a scan), so their content is not included.',
+    )
   })
   it('drops fabricated quotes instead of displaying fake evidence', () => {
     const result = validateEvidence(

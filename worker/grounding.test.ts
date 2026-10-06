@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { exampleAnalysis } from '../shared/fixtures'
 import type { ModelAnalysis, AnalysisRequest } from '../shared/schema'
-import { groundingErrors, sourceContains } from './grounding'
+import { alignDatePages, groundingErrors, sourceContains } from './grounding'
 
 const input: AnalysisRequest = {
   fileName: 'test.pdf',
@@ -34,6 +34,64 @@ const output: ModelAnalysis = {
 }
 
 describe('factual source grounding', () => {
+  it('corrects only an unambiguous neighboring date page, never a distant match', () => {
+    const request = {
+      ...input,
+      pages: [
+        ...input.pages,
+        { number: 2, text: 'Harmonogram i opis prac.' },
+        { number: 3, text: 'Kolejny rozdział.' },
+      ],
+    }
+    const adjacent = {
+      ...output,
+      dates: [{ ...output.dates[0], sourcePage: 2 }],
+    }
+    expect(alignDatePages(adjacent, request).dates[0].sourcePage).toBe(1)
+    const distant = {
+      ...output,
+      dates: [{ ...output.dates[0], sourcePage: 3 }],
+    }
+    expect(alignDatePages(distant, request).dates[0].sourcePage).toBe(3)
+    expect(
+      groundingErrors(alignDatePages(distant, request), request),
+    ).toHaveLength(1)
+    const ambiguous = {
+      ...request,
+      pages: [
+        ...input.pages,
+        request.pages[1],
+        { number: 3, text: input.pages[0].text },
+      ],
+    }
+    expect(alignDatePages(adjacent, ambiguous).dates[0].sourcePage).toBe(2)
+  })
+  it('recognizes an OCR amount wrapped between thousands and units', () => {
+    const request = {
+      ...input,
+      pages: [{ number: 1, text: 'Abonament: 13\n100,00 PLN netto.' }],
+    }
+    expect(
+      groundingErrors(
+        {
+          ...output,
+          amounts: [{ ...output.amounts[0], value: 13100 }],
+          dates: [],
+        },
+        request,
+      ),
+    ).toEqual([])
+    expect(
+      groundingErrors(
+        {
+          ...output,
+          amounts: [{ ...output.amounts[0], value: 100 }],
+          dates: [],
+        },
+        request,
+      ),
+    ).toHaveLength(1)
+  })
   it('recognizes adjacent table dates without accepting fragments of longer days', () => {
     const request = {
       ...input,

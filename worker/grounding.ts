@@ -39,9 +39,7 @@ function numberMatches(raw: string, expected: number) {
 function printedAmountMatches(page: string, expected: number) {
   // Check the actual page rather than trusting a model-generated transcription.
   const numbers =
-    page
-      .normalize('NFKC')
-      .match(/-?\d+(?:[ \u00a0\u202f]\d{3})*(?:[.,]\d+)*/g) ?? []
+    page.normalize('NFKC').match(/-?\d+(?:\s+\d{3})*(?:[.,]\d+)*/g) ?? []
   return numbers.some((number) => numberMatches(number, expected))
     ? null
     : 'page_number_missing'
@@ -115,4 +113,31 @@ export function groundingErrors(
     }
   })
   return errors
+}
+
+// Correct only an unambiguous adjacent-page attribution, never the date itself.
+// A matching date elsewhere in the document is deliberately insufficient.
+export function alignDatePages(
+  data: ModelAnalysis,
+  request: AnalysisRequest,
+): ModelAnalysis {
+  return {
+    ...data,
+    dates: data.dates.map((entry) => {
+      const claimed = request.pages[entry.sourcePage - 1]
+      if (
+        !claimed ||
+        dateMatches(claimed.text, entry.date, data.document.language)
+      )
+        return entry
+      const adjacent = request.pages.filter(
+        (page) =>
+          Math.abs(page.number - entry.sourcePage) === 1 &&
+          dateMatches(page.text, entry.date, data.document.language),
+      )
+      return adjacent.length === 1
+        ? { ...entry, sourcePage: adjacent[0].number }
+        : entry
+    }),
+  }
 }
