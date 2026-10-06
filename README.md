@@ -6,7 +6,7 @@ React + TypeScript application that reads text-based PDFs, summarizes their cont
 
 Deployed on GitHub Pages with a Cloudflare Worker backend. Evaluated with the supplied 12-page PDF and real OpenAI responses on 6 October 2026. See [acceptance results](docs/ACCEPTANCE.md) for measurements and limitations.
 
-![PDF Insight desktop interface](docs/screenshot.png)
+![PDF Insight: analysis of the built-in synthetic demo invoice on the public demo](docs/screenshot.png)
 
 ## Architecture
 
