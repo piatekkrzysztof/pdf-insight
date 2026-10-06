@@ -134,7 +134,7 @@ export default {
         )
       const signal = AbortSignal.any([
         request.signal,
-        AbortSignal.timeout(chunkCount > 1 ? 85_000 : 25_000),
+        AbortSignal.timeout(chunkCount > 1 ? 85_000 : 50_000),
       ])
       const { analysis, chunks } = await analyzeChunks(
         data,

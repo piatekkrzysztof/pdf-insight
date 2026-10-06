@@ -62,6 +62,27 @@ describe('AI boundary', () => {
     ).rejects.toThrow('po dwóch próbach')
     expect(create).toHaveBeenCalledTimes(2)
   })
+  it('omits amounts still absent from their page after the repair attempt', async () => {
+    const ungrounded = {
+      ...modelOutput,
+      amounts: [
+        ...modelOutput.amounts,
+        { value: 42600, currency: 'PLN', context: 'VAT', sourcePage: 1 },
+      ],
+    }
+    create.mockResolvedValue({
+      status: 'completed',
+      output_text: JSON.stringify(ungrounded),
+    })
+    const result = await analyze(
+      exampleRequest,
+      'test-key',
+      'test-model',
+      new AbortController().signal,
+    )
+    expect(create).toHaveBeenCalledTimes(2)
+    expect(result.amounts.map((amount) => amount.value)).toEqual([184500])
+  })
   it('sends the prior invalid analysis back for a targeted repair', async () => {
     const invalid = {
       ...modelOutput,

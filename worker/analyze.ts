@@ -80,6 +80,7 @@ export async function analyze(
   signal: AbortSignal,
   selectedPages?: AnalysisRequest['pages'],
 ) {
+  // Per attempt; the caller's signal bounds both attempts together.
   const client = new OpenAI({ apiKey, maxRetries: 0, timeout: 25_000 })
   let feedback = ''
   let previousAnalysis: unknown
@@ -126,18 +127,35 @@ export async function analyze(
     const unsupported = modelResult.success
       ? groundingErrors(modelResult.data, request)
       : []
-    const parsed = analysisSchema.safeParse(
-      modelResult.success
+    const lastAttempt = attempt === 1
+    const unverified = (field: string, index: number) =>
+      unsupported.some((error) => error.startsWith(`${field}[${index}]:`))
+    // After the repair attempt, amounts/dates absent from their page are
+    // omitted rather than failing the whole analysis or shown as facts.
+    const data =
+      modelResult.success && lastAttempt
         ? {
             ...modelResult.data,
+            amounts: modelResult.data.amounts.filter(
+              (_, index) => !unverified('amounts', index),
+            ),
+            dates: modelResult.data.dates.filter(
+              (_, index) => !unverified('dates', index),
+            ),
+          }
+        : modelResult.data
+    const parsed = analysisSchema.safeParse(
+      data
+        ? {
+            ...data,
             ...applyUnreadNotice(
-              modelResult.data.summarySentences,
-              modelResult.data.keyPoints,
+              data.summarySentences,
+              data.keyPoints,
               unreadPages,
-              modelResult.data.document.language,
+              data.document.language,
             ),
             document: {
-              ...modelResult.data.document,
+              ...data.document,
               fileName: request.fileName,
               pages: request.pages.length,
             },
@@ -147,7 +165,7 @@ export async function analyze(
     if (
       response.status === 'completed' &&
       parsed.success &&
-      unsupported.length === 0
+      (unsupported.length === 0 || lastAttempt)
     ) {
       // File metadata is determined by the parser, never invented by the model.
       const result = analysisSchema.parse({

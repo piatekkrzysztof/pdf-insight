@@ -23,7 +23,7 @@ export async function analyzeDocument(
           document.pages.reduce((sum, page) => sum + page.text.length, 0) >
             40000
             ? 90_000
-            : 28_000,
+            : 55_000,
         ),
       ]),
     })
